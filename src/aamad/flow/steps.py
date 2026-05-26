@@ -268,68 +268,6 @@ class SupportFlowStepsMixin:
 
         return f"Analysis complete: {self.state.category} / {self.state.sentiment}"
 
-    @listen(enrich_with_external_data)
-    async def route_inquiry(self):
-        if self.state.skip_routing:
-            self.log_step("Routing Engine", {
-                "action": self.state.routing_action,
-                "reason": "skip_routing — enrichment already resolved this ticket",
-                "execution_mode": "skip",
-            })
-            return f"Skipped routing: {self.state.routing_action} (skip_routing)"
-
-        decision = route_ticket(
-            inquiry=self.state.inquiry,
-            category=self.state.category,
-            sentiment=self.state.sentiment,
-            urgency=self.state.urgency,
-        )
-        self.state.routing_action = decision.action
-        self.state.routing_reason = decision.reason
-        self.state.routing_missing_info = decision.missing_info
-        self.state.routing_confidence = decision.confidence
-        if decision.triggered_keyword:
-            self.state.triggered_keyword = decision.triggered_keyword
-
-        # If refund intent + order number in the inquiry, always defer to the
-        # refund lookup tool regardless of the routing engine's decision
-        # (catches both "awaiting" and billing "escalate" cases).
-        import re as _re
-        _has_refund_intent = is_refund_inquiry(self.state.inquiry)
-        _has_order = bool(_re.search(r'\b\d{4,12}\b', self.state.inquiry))
-        if _has_refund_intent and _has_order:
-            self.state.routing_action = "pending_lookup"
-            self.state.escalation_required = False
-
-        self.log_step("Routing Engine", {
-            "action": self.state.routing_action,
-            "reason": decision.reason,
-            "missing_info": decision.missing_info,
-            "has_order_number": decision.has_order_number,
-            "has_email": decision.has_email,
-            "explicit_escalation": decision.explicit_escalation,
-            "confidence": decision.confidence,
-            "execution_mode": "deterministic",
-        })
-        return f"Routed as: {self.state.routing_action}"
-
-    @listen(route_inquiry)
-    async def retrieve_knowledge(self):
-        result = await self.execute_tool(
-            "Knowledge Retrieval Tool", self.state.category, self.state.inquiry
-        )
-        self.state.articles = result["articles"]
-        self.state.knowledge_source = result.get("source", "unknown")
-        self.state.knowledge_context = result.get("context_string", "")
-        self.state.knowledge_sources = result.get("sources_used", [])
-        self.state.estimated_context_tokens = result.get("estimated_context_tokens", 0)
-        self.state.tools_used.append("Knowledge Retrieval Tool")
-        self.state.cache_used = self.state.cache_used or result.get("cached", False)
-        return (
-            f"Retrieved {len(self.state.articles)} knowledge articles "
-            f"from {self.state.knowledge_source}"
-        )
-
     @listen(classify_and_sentiment)
     async def enrich_with_external_data(self):
         import re
@@ -627,6 +565,68 @@ class SupportFlowStepsMixin:
         self.state.external_context = "\n".join(context_parts)
         logger.debug("external_context after: %r", self.state.external_context)
         return f"External enrichment done: {len(context_parts)} data point(s)"
+
+    @listen(enrich_with_external_data)
+    async def route_inquiry(self):
+        if self.state.skip_routing:
+            self.log_step("Routing Engine", {
+                "action": self.state.routing_action,
+                "reason": "skip_routing — enrichment already resolved this ticket",
+                "execution_mode": "skip",
+            })
+            return f"Skipped routing: {self.state.routing_action} (skip_routing)"
+
+        decision = route_ticket(
+            inquiry=self.state.inquiry,
+            category=self.state.category,
+            sentiment=self.state.sentiment,
+            urgency=self.state.urgency,
+        )
+        self.state.routing_action = decision.action
+        self.state.routing_reason = decision.reason
+        self.state.routing_missing_info = decision.missing_info
+        self.state.routing_confidence = decision.confidence
+        if decision.triggered_keyword:
+            self.state.triggered_keyword = decision.triggered_keyword
+
+        # If refund intent + order number in the inquiry, always defer to the
+        # refund lookup tool regardless of the routing engine's decision
+        # (catches both "awaiting" and billing "escalate" cases).
+        import re as _re
+        _has_refund_intent = is_refund_inquiry(self.state.inquiry)
+        _has_order = bool(_re.search(r'\b\d{4,12}\b', self.state.inquiry))
+        if _has_refund_intent and _has_order:
+            self.state.routing_action = "pending_lookup"
+            self.state.escalation_required = False
+
+        self.log_step("Routing Engine", {
+            "action": self.state.routing_action,
+            "reason": decision.reason,
+            "missing_info": decision.missing_info,
+            "has_order_number": decision.has_order_number,
+            "has_email": decision.has_email,
+            "explicit_escalation": decision.explicit_escalation,
+            "confidence": decision.confidence,
+            "execution_mode": "deterministic",
+        })
+        return f"Routed as: {self.state.routing_action}"
+
+    @listen(route_inquiry)
+    async def retrieve_knowledge(self):
+        result = await self.execute_tool(
+            "Knowledge Retrieval Tool", self.state.category, self.state.inquiry
+        )
+        self.state.articles = result["articles"]
+        self.state.knowledge_source = result.get("source", "unknown")
+        self.state.knowledge_context = result.get("context_string", "")
+        self.state.knowledge_sources = result.get("sources_used", [])
+        self.state.estimated_context_tokens = result.get("estimated_context_tokens", 0)
+        self.state.tools_used.append("Knowledge Retrieval Tool")
+        self.state.cache_used = self.state.cache_used or result.get("cached", False)
+        return (
+            f"Retrieved {len(self.state.articles)} knowledge articles "
+            f"from {self.state.knowledge_source}"
+        )
 
     @listen(retrieve_knowledge)
     async def generate_response(self):
