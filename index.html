@@ -4822,6 +4822,26 @@
             <span style="font-family:'DM Mono',monospace;font-size:0.68rem;font-variant:small-caps;letter-spacing:0.12em;color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:3px 8px;white-space:nowrap;flex-shrink:0;">TECHNICAL</span>
           </div>
 
+          <!-- Cache Status Banner -->
+          ${cacheHit ? `
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;margin-bottom:16px;">
+            <span style="font-size:20px">⚡</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#FBBF24;">Cache Hit — Zero LLM Cost</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--mono);">An identical inquiry was processed before. Response served instantly from cache. Cost: $0.000000 · Latency: ~10ms</div>
+            </div>
+            <div style="margin-left:auto;font-size:11px;font-family:var(--mono);color:#FBBF24;background:rgba(251,191,36,0.1);padding:4px 8px;border-radius:6px;">$0.00 saved</div>
+          </div>
+          ` : `
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:10px;margin-bottom:16px;">
+            <span style="font-size:20px">🤖</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#10B981;">Fresh LLM Call — Full Pipeline Executed</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--mono);">All 3 CrewAI Crews executed. Classification → Routing → Response → Evaluation.</div>
+            </div>
+          </div>
+          `}
+
           <!-- 3 mini cards -->
           <div class="mini-metrics">
             <div class="mini-card">
@@ -4901,6 +4921,11 @@
                 </tfoot>
               </table>
             </div>
+            ${cacheHit ? `
+            <div style="margin-top:12px;padding:12px 14px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:8px;font-size:12px;color:var(--muted);font-family:var(--mono);">
+              ⚡ No token data — response served from cache. LLM agents were not invoked for this ticket.
+            </div>
+            ` : ''}
           </div>
 
           <!-- Section 3: Full Ticket Payload (collapsed) -->
@@ -6737,12 +6762,16 @@
       const avgTime = times.length > 0
         ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1)
         : '—';
+      const cacheHits = tickets.filter(t => t.cache_used).length;
+      const hitRate = total > 0 ? Math.round(cacheHits / total * 100) : 0;
+      const moneySaved = (cacheHits * 0.0031).toFixed(4);
       return `
         <section class="metrics-row">
           ${renderMetricCard(total, 'Total Tickets')}
           ${renderMetricCard(escalationRate + '%', 'Escalation Rate')}
           ${renderMetricCard(avgTime !== '—' ? avgTime + 's' : '—', 'Avg Response Time')}
           ${renderMetricCard(resolutionRate + '%', 'Resolution Rate')}
+          ${renderMetricCard(hitRate + '%', '⚡ Cache Efficiency', cacheHits + ' tickets from cache · $' + moneySaved + ' saved', '#FBBF24')}
         </section>
       `;
     }
