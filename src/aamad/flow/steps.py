@@ -1064,22 +1064,25 @@ class SupportFlowStepsMixin:
         # Populate response cache for identical future inquiries.
         # Skip caching when external tools were called — refund status,
         # CEP/logistics and weather return real-time data that changes between calls.
-        if self._inquiry_hash and not self._cache_hit and not self.state.external_context:
-            _svc.response_cache[self._inquiry_hash] = {
-                'ts': time.time(),
-                'state': {
-                    'category': self.state.category,
-                    'category_confidence': self.state.category_confidence,
-                    'sentiment': self.state.sentiment,
-                    'sentiment_confidence': self.state.sentiment_confidence,
-                    'urgency': self.state.urgency,
-                    'articles': list(self.state.articles),
-                    'response': self.state.response,
-                    'response_confidence': self.state.response_confidence,
-                    'escalation_required': self.state.escalation_required,
-                    'escalation_reason': self.state.escalation_reason,
-                },
-            }
+        if self._inquiry_hash and not self._cache_hit:
+            if self.state.external_context:
+                logger.info("Skipping cache: external data present")
+            else:
+                _svc.response_cache[self._inquiry_hash] = {
+                    'ts': time.time(),
+                    'state': {
+                        'category': self.state.category,
+                        'category_confidence': self.state.category_confidence,
+                        'sentiment': self.state.sentiment,
+                        'sentiment_confidence': self.state.sentiment_confidence,
+                        'urgency': self.state.urgency,
+                        'articles': list(self.state.articles),
+                        'response': self.state.response,
+                        'response_confidence': self.state.response_confidence,
+                        'escalation_required': self.state.escalation_required,
+                        'escalation_reason': self.state.escalation_reason,
+                    },
+                }
 
         return f"Escalation {'required' if self.state.escalation_required else 'not required'}"
 
