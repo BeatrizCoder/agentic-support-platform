@@ -4268,7 +4268,15 @@
             ${ticket.response ? `<div class="response-bubble">${formatResponseText(ticket.response)}</div>` : ''}
           `;
         } else if (needsHumanReview) {
-          const awaitBtn = ticket.response ? `
+          // Customer already gave us the info they were asked for — don't
+          // offer to put them back in the awaiting queue.
+          const cameFromAwaiting = !!(
+            ticket.escalation_reason?.includes('order_number') ||
+            ticket.escalation_reason?.includes('awaiting') ||
+            ticket.inquiry?.includes('Order Number:') ||
+            ticket.inquiry?.includes('Número do Pedido:')
+          )
+          const awaitBtn = ticket.response && !cameFromAwaiting ? `
             <button class="button-outline-yellow" data-action="await-customer" data-id="${ticket.reference_id}">⏳ Awaiting Customer Info</button>
           ` : '';
           confirmAction = `

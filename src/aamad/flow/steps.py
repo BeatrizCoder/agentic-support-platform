@@ -763,33 +763,44 @@ class SupportFlowStepsMixin:
                 self.state.routing_action = "resolve"
                 self.state.auto_resolve_reason = "weather_delay_severe"
             else:
-                # Moderate — ask for order number to investigate
-                self.state.escalation_required = True
-                self.state.routing_action = "awaiting"
-                self.state.auto_resolve_reason = "weather_delay_moderate"
-                _is_pt_w = self._is_portuguese(self.state.inquiry)
-                _city_w = self.state.detected_city or ("sua região" if _is_pt_w else "your area")
-                _temp_w = self.state.weather_result.get("temperature_c", "")
-                _cond_w = self.state.weather_result.get("conditions", "")
-                if _is_pt_w:
-                    self.state.response = (
-                        f"🌧️ Verificamos as condições em {_city_w} "
-                        f"({_cond_w}, {_temp_w}°C). As condições climáticas "
-                        f"podem estar contribuindo para atrasos na sua região.\n\n"
-                        f"Para investigarmos seu pedido específico, "
-                        f"por favor informe o número do pedido."
+                import re as _re_w
+                _inquiry_has_order = bool(_re_w.search(r'\b\d{4,12}\b', self.state.inquiry))
+                if _inquiry_has_order:
+                    # Customer already provided order number on re-submission — escalate
+                    self.state.escalation_required = True
+                    self.state.routing_action = "escalate"
+                    self.state.auto_resolve_reason = "weather_moderate_with_order"
+                    self.state.escalation_reason = (
+                        "Moderate weather — order number provided, routing to specialist"
                     )
                 else:
-                    self.state.response = (
-                        f"🌧️ We checked conditions in {_city_w} "
-                        f"({_cond_w}, {_temp_w}°C). Weather may be contributing "
-                        f"to delays in your area.\n\n"
-                        f"To investigate your specific order, "
-                        f"please provide your order number."
+                    # Moderate weather, no order number yet — ask for it
+                    self.state.escalation_required = True
+                    self.state.routing_action = "awaiting"
+                    self.state.auto_resolve_reason = "weather_delay_moderate"
+                    _is_pt_w = self._is_portuguese(self.state.inquiry)
+                    _city_w = self.state.detected_city or ("sua região" if _is_pt_w else "your area")
+                    _temp_w = self.state.weather_result.get("temperature_c", "")
+                    _cond_w = self.state.weather_result.get("conditions", "")
+                    if _is_pt_w:
+                        self.state.response = (
+                            f"🌧️ Verificamos as condições em {_city_w} "
+                            f"({_cond_w}, {_temp_w}°C). As condições climáticas "
+                            f"podem estar contribuindo para atrasos na sua região.\n\n"
+                            f"Para investigarmos seu pedido específico, "
+                            f"por favor informe o número do pedido."
+                        )
+                    else:
+                        self.state.response = (
+                            f"🌧️ We checked conditions in {_city_w} "
+                            f"({_cond_w}, {_temp_w}°C). Weather may be contributing "
+                            f"to delays in your area.\n\n"
+                            f"To investigate your specific order, "
+                            f"please provide your order number."
+                        )
+                    self.state.escalation_reason = (
+                        "Moderate weather — awaiting order number for investigation"
                     )
-                self.state.escalation_reason = (
-                    "Moderate weather — awaiting order number for investigation"
-                )
             self.log_step("Routing Engine", {
                 "override": "weather_delay",
                 "severity": _weather_sev,
