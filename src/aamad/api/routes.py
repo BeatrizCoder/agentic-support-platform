@@ -427,6 +427,12 @@ async def create_support_ticket(
             else f"REF-{int(time.time())}"
         )
 
+        # Remap observability events from run_id to the final reference_id.
+        # ESC-* tickets do this inside the escalation step; REF-* tickets need
+        # it here because the reference_id only exists after kickoff_async returns.
+        if not final_state.escalation_required:
+            _svc.observability_service.remap_events(run_id, reference_id)
+
         # Determine status based on routing action and escalation
         if final_state.routing_action == "awaiting":
             status = "awaiting_customer_info"
