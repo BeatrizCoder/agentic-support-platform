@@ -16,9 +16,29 @@ from typing import Any
 from crewai.flow.flow import start, listen
 
 from ..config import ENABLE_EXTERNAL_APIS, ENABLE_MEMORY, DEFAULT_CONFIG
-from ..routing_engine import route_ticket
+from ..routing_engine import route_ticket, check_logistics_alert as _check_logistics_alert
 from ..core import services as _svc
 from tools.refund_lookup_tool import is_refund_inquiry, extract_order_number
+
+# CEP 2-digit prefixes that fall in the Norte/Nordeste logistics alert region.
+# Used as a fallback when ViaCEP is unavailable so the alert can still fire.
+_LOGISTICS_CEP_PREFIXES: frozenset[str] = frozenset({
+    # Norte: AM, PA, AP, RO, RR, AC, TO
+    "69", "66", "67", "68", "76", "77",
+    # Nordeste: MA, PI, CE, RN, PB, PE, AL, SE, BA
+    "65", "64",
+    "60", "61", "62", "63",
+    "59", "58",
+    "50", "51", "52", "53", "54", "55", "56",
+    "57", "49",
+    "40", "41", "42", "43", "44", "45", "46", "47", "48",
+})
+
+
+def _is_logistics_cep(cep: str) -> bool:
+    """Return True if the CEP's 2-digit prefix maps to the logistics alert region."""
+    prefix = cep.replace("-", "")[:2]
+    return prefix in _LOGISTICS_CEP_PREFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -419,9 +439,31 @@ class SupportFlowStepsMixin:
                     })
             else:
                 logger.debug(
-                    "CEP result: valid=False, error=%s, logistics_alert=N/A",
+                    "CEP result: valid=False, error=%s — trying CEP-prefix fallback",
                     addr_result.get("error", addr_result.get("error_type", "unknown")),
                 )
+                # ViaCEP unavailable: use CEP prefix to detect logistics region
+                # so the alert can fire even when the external API is down.
+                if cep and _is_logistics_cep(cep):
+                    alert = _check_logistics_alert("AM")  # representative Norte state
+                    if alert:
+                        self.state.logistics_alert = alert
+                        self.state.routing_action = "resolve"
+                        self.state.skip_routing = True
+                        self.state.api_tags.append("logistics_alert")
+                        context_parts.append(
+                            f"CEP {cep} (prefix lookup, ViaCEP unavailable)"
+                            f"\nLOGISTICS ALERT ACTIVE: "
+                            f"Fleet maintenance causing 3-day delay in Norte/Nordeste."
+                        )
+                        self.log_step("Address Validation Agent", {
+                            "cep": cep,
+                            "cep_valid": False,
+                            "fallback": "cep_prefix",
+                            "logistics_alert": True,
+                            "alert_key": alert["alert_key"],
+                            "execution_mode": "cep_prefix_fallback",
+                        })
             if addr_result.get("fallback"):
                 context_parts.append(f"Address validation: {addr_result.get('fallback')}")
 
@@ -575,6 +617,19 @@ class SupportFlowStepsMixin:
                 "execution_mode": "skip",
             })
             return f"Skipped routing: {self.state.routing_action} (skip_routing)"
+
+        # Guard: enrich_with_external_data may have set logistics_alert without
+        # setting skip_routing (e.g. via CEP-prefix fallback path).
+        if self.state.logistics_alert and self.state.logistics_alert.get("alert_active"):
+            self.state.routing_action = "resolve"
+            self.state.skip_routing = True
+            self.log_step("Routing Engine", {
+                "action": "resolve",
+                "reason": "Logistics alert active — enrichment resolved before routing",
+                "alert_key": self.state.logistics_alert.get("alert_key"),
+                "execution_mode": "deterministic",
+            })
+            return "Skipped routing: resolve (logistics_alert)"
 
         decision = route_ticket(
             inquiry=self.state.inquiry,
