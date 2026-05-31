@@ -85,43 +85,51 @@ HOW_TO_PATTERNS = [
 
 
 LOGISTICS_ALERTS = {
-    "sul_sudeste": {
+    "norte_nordeste": {
         "active": True,
-        "states": ["SP", "RJ", "MG", "ES", "PR", "SC", "RS"],
+        "states": [
+            # Norte
+            "AM", "PA", "AC", "RO", "RR", "AP", "TO",
+            # Nordeste
+            "MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA",
+        ],
         "message_pt": (
-            "Identificamos que sua região está sendo afetada "
-            "por um atraso em nossa frota logística local. "
+            "Identificamos que sua região (Norte/Nordeste) está sendo "
+            "afetada por um atraso em nossa frota logística. "
             "Nossos caminhões estão operando com capacidade "
             "reduzida devido a manutenção programada da frota. "
-            "Seu pedido chegará em até 3 dias úteis adicionais "
-            "além do prazo original. Pedimos desculpas pelo "
+            "Sua entrega pode ter um atraso adicional de "
+            "3 dias úteis além do prazo original. Pedimos desculpas pelo "
             "transtorno."
         ),
         "message_en": (
-            "We've identified that your region is affected by "
-            "a logistics delay in our local fleet. Our trucks "
+            "We've identified that your region (North/Northeast Brazil) "
+            "is affected by a logistics delay in our fleet. Our trucks "
             "are operating at reduced capacity due to scheduled "
-            "fleet maintenance. Your order will arrive up to "
-            "3 additional business days beyond the original "
-            "estimated delivery date. We apologize for the "
-            "inconvenience."
+            "fleet maintenance. Your delivery may have an additional "
+            "3 business days delay beyond the original "
+            "estimated date. We apologize for the inconvenience."
         ),
         "eta_additional_days": 3,
     }
 }
 
 WEATHER_DELAY_REGIONS = {
-    "sul": {
+    "sul_sudeste": {
         "active": True,
         "cities": [
+            # Sul
             "Curitiba", "Porto Alegre", "Florianópolis", "Florianopolis",
             "Joinville", "Blumenau", "Caxias do Sul",
+            # Sudeste
+            "São Paulo", "Sao Paulo", "Rio de Janeiro",
+            "Belo Horizonte", "Campinas", "Guarulhos", "Vitória", "Vitoria",
         ],
         "message_pt": (
             "Identificamos condições climáticas adversas "
             "em sua região ({city}: {conditions}, {temp}°C). "
-            "As fortes chuvas no Sul do Brasil estão causando "
-            "atrasos nas operações logísticas. Sua entrega "
+            "As condições estão causando atrasos nas operações logísticas "
+            "no Sul/Sudeste do Brasil. Sua entrega "
             "pode ter um atraso adicional de 1-2 dias úteis. "
             "Assim que as condições melhorarem, sua entrega "
             "será priorizada."
@@ -129,8 +137,8 @@ WEATHER_DELAY_REGIONS = {
         "message_en": (
             "We've detected adverse weather conditions in "
             "your region ({city}: {conditions}, {temp}°C). "
-            "Heavy rainfall in Southern Brazil is causing "
-            "logistics delays. Your delivery may have an "
+            "These conditions are causing logistics delays "
+            "in Southern/Southeastern Brazil. Your delivery may have an "
             "additional delay of 1-2 business days."
         ),
     }

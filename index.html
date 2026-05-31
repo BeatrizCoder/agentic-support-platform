@@ -3047,12 +3047,14 @@
                 <option value="order_with_number">✅ Pedido 12345 → escala</option>
                 <option value="order_en">❓ Order not arrived (EN)</option>
               </optgroup>
-              <optgroup label="📍 ViaCEP + Logistics">
-                <option value="cep_sp">🚛 CEP SP → logistics alert</option>
-                <option value="cep_rj">🚛 CEP RJ → logistics alert</option>
-                <option value="cep_norte">✅ CEP Manaus → sem alerta</option>
+              <optgroup label="🚛 Logistics Alert (Norte/Nordeste)">
+                <option value="cep_manaus">🚛 Pedido atrasado - Manaus AM (CEP 69005-010)</option>
+                <option value="cep_fortaleza">🚛 Pedido atrasado - Fortaleza CE (CEP 60110-001)</option>
               </optgroup>
-              <optgroup label="🌤️ Weather">
+              <optgroup label="🌧️ Weather Alert (Sul/Sudeste - clima real)">
+                <option value="cep_sp">🌧️ Pedido atrasado - São Paulo SP (CEP 01310-100)</option>
+                <option value="cep_poa_weather">🌧️ Pedido atrasado - Porto Alegre RS (CEP 90040-060)</option>
+                <option value="cep_rj">🌧️ Pedido atrasado - Rio de Janeiro RJ (CEP 20040-020)</option>
                 <option value="weather_curitiba">⛈️ Curitiba → clima real</option>
                 <option value="weather_poa">⛈️ Porto Alegre → clima real</option>
                 <option value="weather_floripa">⛈️ Florianópolis → clima real</option>
@@ -3085,7 +3087,7 @@
                 <option value="technical_payment">💳 Erro no pagamento</option>
               </optgroup>
               <optgroup label="🧪 Advanced Scenarios">
-                <option value="cep_plus_weather">🌧️ CEP SP + Curitiba → ambas APIs</option>
+                <option value="cep_plus_weather">🌧️ CEP Curitiba + cidade → clima real</option>
                 <option value="refund_frustrated">😤 Reembolso frustrado → sentimento urgente</option>
                 <option value="billing_en">💳 Unauthorized charge (EN) → billing escala</option>
                 <option value="mixed_language">🌐 Mixed PT/EN inquiry</option>
@@ -5504,9 +5506,11 @@
       order_no_number: { name:'beatriz costa', email:'beatriz@demo.com', phone:'11999999999', inquiry:'Meu pedido não chegou e já faz 10 dias' },
       order_with_number: { name:'beatriz costa', email:'beatriz@demo.com', phone:'11999999999', inquiry:'Meu pedido 12345 não chegou, email: beatriz@demo.com' },
       order_en: { name:'John Smith', email:'john@demo.com', phone:'', inquiry:'My order has not arrived and it has been 7 days' },
-      cep_sp: { name:'beatriz costa', email:'beatriz@demo.com', phone:'11999999999', inquiry:'Meu pedido não chegou, CEP 01310-100' },
-      cep_rj: { name:'Carlos Silva', email:'carlos@demo.com', phone:'21999999999', inquiry:'Meu pedido não chegou, CEP 20040-020' },
-      cep_norte: { name:'Ana Souza', email:'ana@demo.com', phone:'92999999999', inquiry:'Meu pedido não chegou, CEP 69000-000' },
+      cep_sp: { name:'beatriz costa', email:'beatriz@demo.com', phone:'11999999999', inquiry:'Minha entrega está atrasada, moro em SP, CEP 01310-100' },
+      cep_rj: { name:'Carlos Silva', email:'carlos@demo.com', phone:'21999999999', inquiry:'Cadê meu pedido? CEP 20040-020 Rio de Janeiro' },
+      cep_manaus: { name:'Ana Souza', email:'ana@demo.com', phone:'92999999999', inquiry:'Meu pedido não chegou, CEP 69005-010' },
+      cep_fortaleza: { name:'João Lima', email:'joao@demo.com', phone:'85999999999', inquiry:'Meu pedido atrasou, CEP 60110-001' },
+      cep_poa_weather: { name:'Roberto Gomes', email:'roberto@demo.com', phone:'51999999999', inquiry:'Meu pedido não chegou, sou de Porto Alegre CEP 90040-060' },
       weather_curitiba: { name:'beatriz costa', email:'beatriz@demo.com', phone:'41999999999', inquiry:'Meu pedido atrasou, sou de Curitiba' },
       weather_poa: { name:'Roberto Gomes', email:'roberto@demo.com', phone:'51999999999', inquiry:'Meu pedido atrasou, moro em Porto Alegre' },
       weather_floripa: { name:'Marina Costa', email:'marina@demo.com', phone:'48999999999', inquiry:'Meu pedido atrasou, sou de Florianópolis' },
@@ -5535,6 +5539,25 @@
       pending_warranty: { name:'beatriz costa', email:'beatriz@demo.com', phone:'', inquiry:'Qual o status da garantia do meu fone pedido 77706?' },
       pending_return:   { name:'beatriz costa', email:'beatriz@demo.com', phone:'', inquiry:'Cancelei o pedido 77707, como faço a devolução?' }
     };
+
+    const LOGISTICS_CEP_RANGES = [
+      '69', // AM - Manaus
+      '66', // PA - Belém
+      '60', // CE - Fortaleza
+      '59', // RN - Natal
+      '58', // PB - João Pessoa
+      '50', '51', '52', '53', '54', '55', '56', // PE
+      '57', // AL
+      '49', // SE
+      '40', '41', '42', '43', '44', '45', '46', '47', '48', // BA
+      '65', // MA
+      '64', // PI
+    ]
+
+    function isLogisticsCEP(cep) {
+      const prefix = cep.replace(/\D/g, '').slice(0, 2)
+      return LOGISTICS_CEP_RANGES.includes(prefix)
+    }
 
     function willEscalate(inquiry) {
       console.log('willEscalate called with:', inquiry);
