@@ -8268,6 +8268,7 @@
           }
         }
         lastRefreshTime = new Date().toLocaleTimeString();
+        localStorage.setItem('cached_tickets', JSON.stringify(state.tickets.slice(0, 20)))
         return tickets;
 
       } catch (e) {
@@ -8477,6 +8478,14 @@
     document.addEventListener('DOMContentLoaded', async () => {
       if (!state.apiKey) {
         state.apiKey = getApiKey();
+      }
+      const cached = localStorage.getItem('cached_tickets')
+      if (cached && state.tickets.length === 0) {
+        try {
+          state.tickets = JSON.parse(cached)
+          console.log('Loaded tickets from cache:', state.tickets.length)
+          render()
+        } catch(e) {}
       }
       await loadTicketsFromDB();
       await initMetricsWithRetry();
@@ -8711,9 +8720,20 @@
           state.jwtToken = token
           state.currentUser = user
           hideLoginScreen()
-          await loadTicketsFromDB()
-          await loadMetrics()
-          render()
+          // Load cached tickets immediately
+          const cached = localStorage.getItem('cached_tickets')
+          if (cached) {
+            try {
+              state.tickets = JSON.parse(cached)
+              render()  // Show cached tickets instantly
+            } catch(e) {}
+          }
+          // Then refresh from backend in background
+          setTimeout(async () => {
+            await loadTicketsFromDB()
+            await loadMetrics()
+            render()  // Update with fresh data
+          }, 1000)
           return
         }
 
@@ -8741,7 +8761,16 @@
         }
 
         hideLoginScreen()
-        render()
+        // Load cached tickets immediately
+        const cached = localStorage.getItem('cached_tickets')
+        if (cached) {
+          try {
+            state.tickets = JSON.parse(cached)
+            render()  // Show cached tickets instantly
+          } catch(e) {}
+        } else {
+          render()
+        }
 
         // Retry in background after 3s
         setTimeout(async () => {
