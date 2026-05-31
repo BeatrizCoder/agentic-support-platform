@@ -818,9 +818,9 @@ async def approve_ticket(reference_id: str, _=Depends(verify_api_key)):
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    if ticket.status != "pending_human_review":
+    if ticket.status in ("completed", "approved"):
         raise HTTPException(
-            status_code=400, detail="Ticket is not pending human review"
+            status_code=400, detail="Ticket is already resolved"
         )
 
     data_store.update_ticket_status(reference_id, "approved")

@@ -6244,6 +6244,11 @@
     }
 
     async function approveTicket(referenceId) {
+      console.log('approveTicket called:', referenceId)
+
+      const url = `${state.backendUrl}/${referenceId}/approve`
+      console.log('URL:', url)
+
       const btn = event?.target;
       if (btn) {
         btn.textContent = '⏳ Approving...';
@@ -6259,40 +6264,42 @@
           ticket._human_approved = true;
           ticket._approved_at = new Date().toISOString();
         }
-        showToast('✅ Ticket approved and resolved!');
+        showToast('✅ Ticket resolved!');
         render();
         return;
       }
 
       try {
-        const res = await fetch(
-          `${state.backendUrl}/${referenceId}/approve`,
-          { method: 'POST', headers: { 'X-API-Key': getApiKey() } }
-        );
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-API-Key': getApiKey() }
+        })
+
+        console.log('Response status:', res.status)
+        const data = await res.json()
+        console.log('Response data:', data)
 
         if (res.ok) {
-          const ticket = state.tickets.find(t => t.reference_id === referenceId);
+          const ticket = state.tickets.find(t => t.reference_id === referenceId)
           if (ticket) {
-            ticket.status = 'completed';
-            ticket.escalation_required = false;
-            ticket.routing_action = 'resolve';
-            ticket._human_approved = true;
-            ticket._approved_at = new Date().toISOString();
+            ticket.status = 'completed'
+            ticket.escalation_required = false
+            ticket._human_approved = true
           }
-          showToast('✅ Ticket approved and resolved!');
-          render();
+          showToast('✅ Ticket resolved!')
+          render()
         } else {
-          showToast('❌ Failed to approve ticket');
+          showToast(`❌ Failed: ${data.detail || res.status}`)
           if (btn) {
-            btn.textContent = '✅ Approve & Resolve';
+            btn.textContent = '✅ Mark as Resolved';
             btn.disabled = false;
           }
         }
       } catch (e) {
-        console.error('approveTicket error:', e);
-        showToast('❌ Connection error');
+        console.error('approveTicket error:', e)
+        showToast('❌ Connection error')
         if (btn) {
-          btn.textContent = '✅ Approve & Resolve';
+          btn.textContent = '✅ Mark as Resolved';
           btn.disabled = false;
         }
       }

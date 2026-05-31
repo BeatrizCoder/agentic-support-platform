@@ -918,13 +918,11 @@ class SupportFlowStepsMixin:
                 self.state.routing_action = "resolve"
                 self.state.auto_resolve_reason = "pending_action_auto"
             else:
-                self.state.escalation_required = True
+                # Customer must provide something (photo, docs, shipment, etc.)
+                # — not an escalation, just awaiting their action.
+                self.state.escalation_required = False
                 self.state.routing_action = "awaiting"
                 self.state.auto_resolve_reason = "pending_action"
-                self.state.escalation_reason = (
-                    f"Pending action {pa.get('status', '')} "
-                    f"requires {pa.get('action_required', '')}"
-                )
             self.log_step("Routing Engine", {
                 "override": "pending_action",
                 "order_number": pa.get("order_number"),
