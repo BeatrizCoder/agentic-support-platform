@@ -8651,68 +8651,94 @@
     }
 
     async function checkAuth() {
-      const token = localStorage.getItem('jwt_token');
-      console.log('checkAuth: token=', token ? 'exists' : 'none');
-      if (!token) { showLoginScreen(); return; }
+      const token = localStorage.getItem('jwt_token')
+
+      if (!token) {
+        showLoginScreen()
+        return
+      }
+
+      // Try to verify with backend
       try {
         const isLocal = (
           window.location.hostname === 'localhost' ||
           window.location.hostname === '127.0.0.1'
-        );
+        )
         const backendBase = isLocal
           ? 'http://localhost:8000'
-          : 'https://web-production-26e1b.up.railway.app';
-        console.log('checkAuth: calling', backendBase + '/auth/me');
+          : 'https://web-production-126e2.up.railway.app'
+
+        const controller = new AbortController()
+        const timeout = setTimeout(
+          () => controller.abort(), 5000
+        )
+
         const res = await fetch(`${backendBase}/auth/me`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          signal: AbortSignal.timeout(5000),
-        });
-        console.log('checkAuth: /auth/me status', res.status);
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          signal: controller.signal
+        })
+
+        clearTimeout(timeout)
+
         if (res.ok) {
-          const user = await res.json();
-          console.log('checkAuth: valid session', user);
-          if (user.user_id) {
-            localStorage.setItem('session_user_id', user.user_id);
-          }
-          state.authenticated = true;
-          state.jwtToken = token;
-          state.currentUser = user;
-          hideLoginScreen();
-          if (typeof loadTicketsFromDB === 'function') await loadTicketsFromDB();
-          if (typeof loadMetrics === 'function') await loadMetrics();
-          if (typeof render === 'function') render();
-          return;
+          const user = await res.json()
+          state.authenticated = true
+          state.jwtToken = token
+          state.currentUser = user
+          hideLoginScreen()
+          await loadTicketsFromDB()
+          await loadMetrics()
+          render()
+          return
         }
-        // 401 = expired/invalid token — require re-login
+
         if (res.status === 401) {
-          console.log('checkAuth: token expired, showing login');
-          localStorage.removeItem('jwt_token');
-          showLoginScreen();
-          return;
+          // Token truly expired
+          localStorage.removeItem('jwt_token')
+          showLoginScreen()
+          return
         }
-        // Other server error — treat optimistically
-        throw new Error(`Server error ${res.status}`);
+
       } catch (e) {
-        console.warn('checkAuth network error:', e.message);
-        // Network error or timeout: token might be valid — don't force login
-        if (token) {
-          console.log('checkAuth: network error but token exists — auto-login optimistically');
-          state.authenticated = true;
-          state.jwtToken = token;
-          state.currentUser = {
-            name: 'Demo User',
-            role: 'guest',
-            user_id: localStorage.getItem('session_user_id'),
-          };
-          hideLoginScreen();
-          if (typeof render === 'function') render();
-          // Retry loading data after a short delay
-          setTimeout(async () => {
-            if (typeof loadTicketsFromDB === 'function') await loadTicketsFromDB();
-            if (typeof loadMetrics === 'function') await loadMetrics();
-            if (typeof render === 'function') render();
-          }, 2000);
+        // Network error or timeout
+        // Token might be valid — use optimistically
+        console.warn('checkAuth: network issue, using token optimistically')
+
+        // DON'T remove token!
+        // DON'T show login screen!
+
+        state.authenticated = true
+        state.jwtToken = token
+        state.currentUser = {
+          name: 'Demo User',
+          role: 'guest',
+          user_id: localStorage.getItem('session_user_id')
         }
+
+        hideLoginScreen()
+        render()
+
+        // Retry in background after 3s
+        setTimeout(async () => {
+          try {
+            const isLocal = (
+              window.location.hostname === 'localhost' ||
+              window.location.hostname === '127.0.0.1'
+            )
+            const backendBase = isLocal
+              ? 'http://localhost:8000'
+              : 'https://web-production-126e2.up.railway.app'
+
+            await loadTicketsFromDB()
+            await loadMetrics()
+            render()
+            console.log('Background retry successful')
+          } catch (e) {
+            console.warn('Background retry failed:', e.message)
+          }
+        }, 3000)
       }
     }
 
