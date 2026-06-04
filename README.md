@@ -3,7 +3,6 @@
 > Multi-agent AI customer support platform built with FastAPI, CrewAI Flow, Claude Haiku 4.5, and vanilla JS.
 > Capstone project — "Become An Agentic Architect" course by Carmelo Iaria.
 
-🌐 **Live Demo:** https://agentic-support-platform.vercel.app  
 🔧 **Backend API (Railway):** https://web-production-126e2.up.railway.app  
 🔧 **Backend API (Render backup):** https://agentic-support-platform.onrender.com  
 📦 **GitHub:** https://github.com/BeatrizCoder/agentic-support-platform
