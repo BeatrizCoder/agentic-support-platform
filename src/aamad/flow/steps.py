@@ -273,6 +273,22 @@ class SupportFlowStepsMixin:
         self.state.urgency = result.get("urgency", "Low")
         self.state.sentiment_confidence = result.get("sentiment_confidence", 70)
 
+        # Capture token usage from crew result
+        token_usage = result.get("token_usage", {})
+        if token_usage:
+            input_tokens = token_usage.get("input_tokens", 0)
+            output_tokens = token_usage.get("output_tokens", 0)
+            total_tokens = token_usage.get("total_tokens", 0)
+            
+            # Accumulate in state
+            if not self.state.token_usage:
+                self.state.token_usage = {}
+            self.state.token_usage["analysis_crew"] = token_usage
+            
+            # Calculate cost (Haiku pricing: $0.25/1M input, $1.25/1M output)
+            cost = (input_tokens * 0.25 / 1_000_000) + (output_tokens * 1.25 / 1_000_000)
+            self.state.cost_usd += cost
+
         latency = round((time.time() - start) * 1000, 2)
 
         self.log_step("Analysis Crew", {
@@ -282,8 +298,11 @@ class SupportFlowStepsMixin:
             "sentiment": self.state.sentiment,
             "urgency": self.state.urgency,
             "language": self.state.detected_language,
-            "execution_mode": "crewai_sequential",
+            "execution_mode": "llm",
             "latency_ms": latency,
+            "input_tokens": token_usage.get("input_tokens", 0) if token_usage else 0,
+            "output_tokens": token_usage.get("output_tokens", 0) if token_usage else 0,
+            "total_tokens": token_usage.get("total_tokens", 0) if token_usage else 0,
         })
 
         return f"Analysis complete: {self.state.category} / {self.state.sentiment}"
@@ -712,6 +731,22 @@ class SupportFlowStepsMixin:
         if result.get("response"):
             self.state.response = result["response"]
 
+        # Capture token usage from crew result
+        token_usage = result.get("token_usage", {})
+        if token_usage:
+            input_tokens = token_usage.get("input_tokens", 0)
+            output_tokens = token_usage.get("output_tokens", 0)
+            total_tokens = token_usage.get("total_tokens", 0)
+            
+            # Accumulate in state
+            if not self.state.token_usage:
+                self.state.token_usage = {}
+            self.state.token_usage["response_crew"] = token_usage
+            
+            # Calculate cost (Haiku pricing: $0.25/1M input, $1.25/1M output)
+            cost = (input_tokens * 0.25 / 1_000_000) + (output_tokens * 1.25 / 1_000_000)
+            self.state.cost_usd += cost
+
         self.state.response_confidence = 80  # Crew doesn't expose token-level confidence
         self.state.tools_used.append("Response Crew")
 
@@ -722,8 +757,11 @@ class SupportFlowStepsMixin:
             "routing_action": self.state.routing_action,
             "has_external_context": bool(self.state.external_context),
             "response_length": len(self.state.response or ""),
-            "execution_mode": "crewai_sequential",
+            "execution_mode": "llm",
             "latency_ms": latency,
+            "input_tokens": token_usage.get("input_tokens", 0) if token_usage else 0,
+            "output_tokens": token_usage.get("output_tokens", 0) if token_usage else 0,
+            "total_tokens": token_usage.get("total_tokens", 0) if token_usage else 0,
         })
 
         # Validate response with skills
@@ -1162,6 +1200,8 @@ class SupportFlowStepsMixin:
                 )
                 summary = result.get("summary", {})
                 quality = result.get("quality", {})
+                token_usage = result.get("token_usage", {})
+                
                 _ds.update_ticket_quality(
                     run_id=run_id,
                     ticket_summary=summary.get("summary", ""),
@@ -1169,6 +1209,32 @@ class SupportFlowStepsMixin:
                     key_facts=summary.get("key_facts", []),
                     quality_evaluation=quality,
                 )
+                
+                # Save token usage for evaluation crew if available
+                if token_usage:
+                    try:
+                        from ..observability import ObservabilityEvent
+                        from ..core import services as _svc
+                        
+                        input_tokens = token_usage.get("input_tokens", 0)
+                        output_tokens = token_usage.get("output_tokens", 0)
+                        cost = (input_tokens * 0.80 / 1_000_000) + (output_tokens * 4.00 / 1_000_000)  # Sonnet pricing
+                        
+                        event = ObservabilityEvent(
+                            reference_id=run_id,  # Use run_id as reference since ref_id not available yet
+                            agent_name="Evaluation Crew",
+                            event_type="llm_call",
+                            execution_mode="llm",
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            total_tokens=token_usage.get("total_tokens", 0),
+                            cost_usd=cost,
+                            status="success",
+                        )
+                        _svc.observability_service.record(event)
+                    except Exception as e:
+                        logger.warning("Failed to save evaluation crew token usage: %s", e)
+                
                 logger.info(
                     "Background evaluation complete: run_id=%s grade=%s",
                     run_id,

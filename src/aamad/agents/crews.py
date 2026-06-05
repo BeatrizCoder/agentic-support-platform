@@ -1,3 +1,5 @@
+
+
 """Three CrewAI Crews that map to the three pipeline phases."""
 
 import io
@@ -45,7 +47,7 @@ def _extract_json(raw: str) -> dict:
 def run_analysis_crew(inquiry: str) -> dict:
     """
     Crew 1: Classification + Sentiment sequential.
-    Returns combined category + sentiment result.
+    Returns combined category + sentiment result + token usage.
     """
     from .tasks import make_classification_task, make_sentiment_task
     from .definitions import classification_agent, sentiment_agent
@@ -62,6 +64,18 @@ def run_analysis_crew(inquiry: str) -> dict:
 
     result = _kickoff_silent(crew)
 
+    # Extract token usage from CrewAI result
+    token_usage = {}
+    try:
+        if hasattr(result, 'usage_metrics') and result.usage_metrics:
+            token_usage = {
+                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
+                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
+                "total_tokens": result.usage_metrics.get("total_tokens", 0),
+            }
+    except Exception as e:
+        logger.warning("Failed to extract token usage from crew result: %s", e)
+
     try:
         tasks_output = result.tasks_output
 
@@ -76,6 +90,7 @@ def run_analysis_crew(inquiry: str) -> dict:
             "sentiment": sentiment.get("sentiment", "Neutral"),
             "urgency": sentiment.get("urgency", "Low"),
             "sentiment_confidence": sentiment.get("confidence", 70),
+            "token_usage": token_usage,
         }
 
     except Exception as e:
@@ -87,6 +102,7 @@ def run_analysis_crew(inquiry: str) -> dict:
             "sentiment": "Neutral",
             "urgency": "Low",
             "sentiment_confidence": 70,
+            "token_usage": {},
         }
 
 
@@ -124,15 +140,27 @@ def run_response_crew(
 
     result = _kickoff_silent(crew)
 
+    # Extract token usage from CrewAI result
+    token_usage = {}
+    try:
+        if hasattr(result, 'usage_metrics') and result.usage_metrics:
+            token_usage = {
+                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
+                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
+                "total_tokens": result.usage_metrics.get("total_tokens", 0),
+            }
+    except Exception as e:
+        logger.warning("Failed to extract token usage from crew result: %s", e)
+
     try:
         response_text = result.tasks_output[-1].raw.strip()
         if response_text.startswith("{"):
             data = json.loads(response_text)
             response_text = data.get("response", response_text)
-        return {"response": response_text}
+        return {"response": response_text, "token_usage": token_usage}
     except Exception as e:
         logger.error("Response crew failed: %s", e)
-        return {"response": ""}
+        return {"response": "", "token_usage": {}}
 
 
 def run_evaluation_crew(
@@ -164,14 +192,26 @@ def run_evaluation_crew(
 
     result = _kickoff_silent(crew)
 
+    # Extract token usage from CrewAI result
+    token_usage = {}
+    try:
+        if hasattr(result, 'usage_metrics') and result.usage_metrics:
+            token_usage = {
+                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
+                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
+                "total_tokens": result.usage_metrics.get("total_tokens", 0),
+            }
+    except Exception as e:
+        logger.warning("Failed to extract token usage from crew result: %s", e)
+
     try:
         tasks_output = result.tasks_output
 
         summary = _extract_json(tasks_output[0].raw)
         quality = _extract_json(tasks_output[1].raw)
 
-        return {"summary": summary, "quality": quality}
+        return {"summary": summary, "quality": quality, "token_usage": token_usage}
 
     except Exception as e:
         logger.error("Evaluation crew failed: %s", e)
-        return {"summary": {}, "quality": {}}
+        return {"summary": {}, "quality": {}, "token_usage": {}}

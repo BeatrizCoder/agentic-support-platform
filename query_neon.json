@@ -1,0 +1,3 @@
+{
+  "query": "SELECT oe.reference_id, oe.step_name, oe.input_tokens, oe.output_tokens, oe.cost_usd, oe.execution_mode FROM observability_events oe WHERE oe.reference_id = 'REF-1780635978' ORDER BY oe.id"
+}
