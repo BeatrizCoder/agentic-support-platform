@@ -10,8 +10,28 @@ import re
 import sys
 
 from crewai import Crew, Process
+import litellm
 
 logger = logging.getLogger(__name__)
+
+# Thread-local token tracking
+_crew_tokens = {"input": 0, "output": 0, "total": 0}
+
+def _reset_tokens():
+    """Reset token counter before crew execution."""
+    global _crew_tokens
+    _crew_tokens = {"input": 0, "output": 0, "total": 0}
+
+def _track_tokens(kwargs, completion_response, start_time, end_time):
+    """Callback to track token usage from LiteLLM."""
+    try:
+        usage = getattr(completion_response, 'usage', None)
+        if usage:
+            _crew_tokens["input"] += getattr(usage, 'prompt_tokens', 0)
+            _crew_tokens["output"] += getattr(usage, 'completion_tokens', 0)
+            _crew_tokens["total"] += getattr(usage, 'total_tokens', 0)
+    except Exception:
+        pass
 
 
 def _kickoff_silent(crew: Crew):
@@ -52,29 +72,33 @@ def run_analysis_crew(inquiry: str) -> dict:
     from .tasks import make_classification_task, make_sentiment_task
     from .definitions import classification_agent, sentiment_agent
 
-    crew = Crew(
-        agents=[classification_agent, sentiment_agent],
-        tasks=[
-            make_classification_task(inquiry),
-            make_sentiment_task(inquiry),
-        ],
-        process=Process.sequential,
-        verbose=False,
-    )
+    # Reset and register callback
+    _reset_tokens()
+    old_callbacks = litellm.success_callback
+    litellm.success_callback = [_track_tokens]
 
-    result = _kickoff_silent(crew)
-
-    # Extract token usage from CrewAI result
-    token_usage = {}
     try:
-        if hasattr(result, 'usage_metrics') and result.usage_metrics:
-            token_usage = {
-                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
-                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
-                "total_tokens": result.usage_metrics.get("total_tokens", 0),
-            }
-    except Exception as e:
-        logger.warning("Failed to extract token usage from crew result: %s", e)
+        crew = Crew(
+            agents=[classification_agent, sentiment_agent],
+            tasks=[
+                make_classification_task(inquiry),
+                make_sentiment_task(inquiry),
+            ],
+            process=Process.sequential,
+            verbose=False,
+        )
+
+        result = _kickoff_silent(crew)
+
+        # Get tracked tokens
+        token_usage = {
+            "input_tokens": _crew_tokens["input"],
+            "output_tokens": _crew_tokens["output"],
+            "total_tokens": _crew_tokens["total"],
+        }
+    finally:
+        # Restore old callbacks
+        litellm.success_callback = old_callbacks
 
     try:
         tasks_output = result.tasks_output
@@ -124,33 +148,37 @@ def run_response_crew(
     from .tasks import make_knowledge_task, make_response_task
     from .definitions import knowledge_agent, response_agent
 
-    crew = Crew(
-        agents=[knowledge_agent, response_agent],
-        tasks=[
-            make_knowledge_task(inquiry, category, knowledge_context),
-            make_response_task(
-                inquiry, category, sentiment, urgency,
-                routing_action, knowledge_context,
-                external_context, detected_language,
-            ),
-        ],
-        process=Process.sequential,
-        verbose=False,
-    )
+    # Reset and register callback
+    _reset_tokens()
+    old_callbacks = litellm.success_callback
+    litellm.success_callback = [_track_tokens]
 
-    result = _kickoff_silent(crew)
-
-    # Extract token usage from CrewAI result
-    token_usage = {}
     try:
-        if hasattr(result, 'usage_metrics') and result.usage_metrics:
-            token_usage = {
-                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
-                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
-                "total_tokens": result.usage_metrics.get("total_tokens", 0),
-            }
-    except Exception as e:
-        logger.warning("Failed to extract token usage from crew result: %s", e)
+        crew = Crew(
+            agents=[knowledge_agent, response_agent],
+            tasks=[
+                make_knowledge_task(inquiry, category, knowledge_context),
+                make_response_task(
+                    inquiry, category, sentiment, urgency,
+                    routing_action, knowledge_context,
+                    external_context, detected_language,
+                ),
+            ],
+            process=Process.sequential,
+            verbose=False,
+        )
+
+        result = _kickoff_silent(crew)
+
+        # Get tracked tokens
+        token_usage = {
+            "input_tokens": _crew_tokens["input"],
+            "output_tokens": _crew_tokens["output"],
+            "total_tokens": _crew_tokens["total"],
+        }
+    finally:
+        # Restore old callbacks
+        litellm.success_callback = old_callbacks
 
     try:
         response_text = result.tasks_output[-1].raw.strip()
@@ -177,32 +205,36 @@ def run_evaluation_crew(
     from .tasks import make_summary_task, make_quality_task
     from .definitions import summary_agent, quality_agent
 
-    crew = Crew(
-        agents=[summary_agent, quality_agent],
-        tasks=[
-            make_summary_task(inquiry, category, "", response),
-            make_quality_task(
-                inquiry, response, category,
-                knowledge_context, external_context,
-            ),
-        ],
-        process=Process.sequential,
-        verbose=False,
-    )
+    # Reset and register callback
+    _reset_tokens()
+    old_callbacks = litellm.success_callback
+    litellm.success_callback = [_track_tokens]
 
-    result = _kickoff_silent(crew)
-
-    # Extract token usage from CrewAI result
-    token_usage = {}
     try:
-        if hasattr(result, 'usage_metrics') and result.usage_metrics:
-            token_usage = {
-                "input_tokens": result.usage_metrics.get("prompt_tokens", 0),
-                "output_tokens": result.usage_metrics.get("completion_tokens", 0),
-                "total_tokens": result.usage_metrics.get("total_tokens", 0),
-            }
-    except Exception as e:
-        logger.warning("Failed to extract token usage from crew result: %s", e)
+        crew = Crew(
+            agents=[summary_agent, quality_agent],
+            tasks=[
+                make_summary_task(inquiry, category, "", response),
+                make_quality_task(
+                    inquiry, response, category,
+                    knowledge_context, external_context,
+                ),
+            ],
+            process=Process.sequential,
+            verbose=False,
+        )
+
+        result = _kickoff_silent(crew)
+
+        # Get tracked tokens
+        token_usage = {
+            "input_tokens": _crew_tokens["input"],
+            "output_tokens": _crew_tokens["output"],
+            "total_tokens": _crew_tokens["total"],
+        }
+    finally:
+        # Restore old callbacks
+        litellm.success_callback = old_callbacks
 
     try:
         tasks_output = result.tasks_output
