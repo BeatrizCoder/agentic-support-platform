@@ -1039,48 +1039,20 @@ class SupportFlowStepsMixin:
                     )
 
             elif self.state.routing_action == "awaiting":
+                # Let LLM generate contextual response instead of hardcoded templates
+                # LLM will ask for missing info in a more natural, conversational way
                 self.state.escalation_required = True
                 self.state.escalation_reason = (
                     f"Awaiting customer information: "
                     f"{', '.join(self.state.routing_missing_info)}"
                 )
+                # Add missing info to external context so LLM knows what to ask for
                 missing = self.state.routing_missing_info
-                pt = self._is_portuguese(self.state.inquiry)
-
-                if "order_number" in missing and "email" in missing:
-                    self.state.response = (
-                        "Entendo sua situação e quero ajudá-la o mais rápido possível! "
-                        "Para isso, preciso de algumas informações:\n\n"
-                        "1. Número do pedido\n"
-                        "2. E-mail cadastrado na conta\n\n"
-                        "Assim que receber essas informações, encaminharei para nossa equipe especializada."
-                    ) if pt else (
-                        "I'd love to help resolve this quickly! To proceed, I need:\n\n"
-                        "1. Your order number\n"
-                        "2. Email address on the account\n\n"
-                        "Once I have these details, I'll route your case to our specialist team immediately."
-                    )
-                elif "order_number" in missing:
-                    self.state.response = (
-                        "Para localizar seu pedido e ajudá-la, preciso do número do pedido. "
-                        "Você pode encontrá-lo no e-mail de confirmação da compra. Pode me informar?"
-                    ) if pt else (
-                        "To locate your order and help you, I need your order number. "
-                        "You can find it in your purchase confirmation email. Could you share it?"
-                    )
-                elif "screenshot_or_description" in missing:
-                    self.state.response = (
-                        "Para diagnosticar o problema técnico, pode me fornecer:\n\n"
-                        "1. Um screenshot do erro (se possível)\n"
-                        "2. Qual navegador e dispositivo está usando\n"
-                        "3. Mensagem de erro exata (se aparecer)\n\n"
-                        "Com essas informações consigo ajudá-la melhor!"
-                    ) if pt else (
-                        "To diagnose the technical issue, could you provide:\n\n"
-                        "1. A screenshot of the error (if possible)\n"
-                        "2. Which browser and device you're using\n"
-                        "3. The exact error message (if any)\n\n"
-                        "This will help me assist you better!"
+                if missing:
+                    self.state.external_context += (
+                        f"\n\nMISSING INFORMATION NEEDED: {', '.join(missing)}\n"
+                        f"The LLM should ask for this information in a natural, "
+                        f"helpful way that explains WHY it's needed."
                     )
 
             elif self.state.routing_action in ("step_by_step", "resolve"):
