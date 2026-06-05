@@ -1041,7 +1041,8 @@ class SupportFlowStepsMixin:
             elif self.state.routing_action == "awaiting":
                 # Let LLM generate contextual response instead of hardcoded templates
                 # LLM will ask for missing info in a more natural, conversational way
-                self.state.escalation_required = True
+                # Set escalation_required = False so it shows as "Awaiting" not "Escalated"
+                self.state.escalation_required = False
                 self.state.escalation_reason = (
                     f"Awaiting customer information: "
                     f"{', '.join(self.state.routing_missing_info)}"
