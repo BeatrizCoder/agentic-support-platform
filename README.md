@@ -106,7 +106,7 @@ Customer Inquiry
 
 | Step | Agent/Component | Type | Description |
 |------|----------------|------|-------------|
-| 1 | **Crew 1: Analysis** | 🤖 CrewAI | Classification + Sentiment in parallel |
+| 1 | **Crew 1: Analysis** | 🤖 CrewAI | Classification + Sentiment sequential |
 | 1a | Classification Agent | 🤖 LLM Haiku | Category + language detection |
 | 1b | Sentiment Agent | 🤖 LLM Haiku | Sentiment + urgency (parallel with 1a) |
 | 2 | **Routing Engine** | ⚙️ Rules | Priority-based routing decision |
@@ -121,6 +121,9 @@ Customer Inquiry
 | 7b | Quality Agent | 🤖 LLM Sonnet | Cross-model evaluation |
 
 **Crew 3 runs in background** — customer receives response in ~8s while evaluation happens asynchronously (~10s later in Operator Dashboard).
+
+**Why sequential instead of parallel for Crew 1?**
+The Sentiment Agent benefits from knowing the detected category, improving accuracy in edge cases (e.g., sarcasm in billing complaints vs. general questions). The ~900ms latency difference is negligible compared to the 8s total pipeline time, and quality takes priority over speed in the analysis phase.
 
 ---
 
