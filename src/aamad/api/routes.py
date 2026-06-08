@@ -52,8 +52,9 @@ def _fallback_ticket_data(inquiry: str, error: Exception, started_at: float) -> 
         urgency="Low",
         articles=[],
         response=(
-            "Thanks for your message. We received your request and are working to restore "
-            "the support service. If you need immediate help, please try again in a moment."
+            "Obrigado pela sua mensagem! Recebemos seu contato. "
+            "Se você tiver alguma dúvida específica ou precisar de ajuda com um pedido, "
+            "ficaremos felizes em ajudar. Por favor, forneça mais detalhes sobre o que você precisa."
         ),
         response_confidence=50,
         escalation_required=False,
