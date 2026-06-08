@@ -109,7 +109,18 @@ Give estimated recovery timeline: 2-3 business days after conditions improve.
 Use ⛈️ emoji. Be reassuring and professional.
 """
         else:
-            external_instructions = """
+            if routing_action == "escalate":
+                external_instructions = """
+MODERATE WEATHER ALERT + ORDER NUMBER PROVIDED.
+The customer has already supplied the order number, so this specific
+order should be escalated for specialist review.
+Explain that weather may be contributing, but since the order details are
+available, the ticket is now routed to a human investigator.
+Do NOT ask for the order number again.
+Use 🌧️ emoji. Be contextual, direct, and reassuring.
+"""
+            else:
+                external_instructions = """
 MODERATE WEATHER ALERT.
 Explain that weather conditions in the customer's city may be contributing to delays.
 Mention the REAL temperature and conditions from the External Context.

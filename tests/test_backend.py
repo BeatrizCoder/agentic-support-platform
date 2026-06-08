@@ -13,6 +13,7 @@ from aamad.data_store import SupportTicketData, data_store
 from aamad.flow.state import SupportState
 from aamad.flow.support_flow import SupportFlow
 from aamad.api.models import SupportTicket
+from aamad.agents.tasks import make_response_task
 from aamad.integrations.ticketing_client import TicketingClient
 from aamad.integrations.crm_client import CRMClient
 from aamad.integrations.notification_client import NotificationClient
@@ -54,6 +55,21 @@ def test_support_flow_process_returns_valid_context():
 def test_support_ticket_model():
     ticket = SupportTicket(inquiry="Please help with payment issues.")
     assert ticket.inquiry.startswith("Please help")
+
+
+def test_moderate_weather_escalation_prompt_respects_order_number():
+    task = make_response_task(
+        inquiry="Meu pedido 12345 está atrasado e eu preciso de ajuda.",
+        category="Order Issues",
+        sentiment="Concerned",
+        urgency="High",
+        routing_action="escalate",
+        knowledge_summary="",
+        external_context="WEATHER DELAY ALERT: MODERATE — conditions are rainy in Curitiba.",
+        detected_language="pt",
+    )
+    assert "ORDER NUMBER PROVIDED" in task.description.upper()
+    assert "DO NOT ASK FOR THE ORDER NUMBER AGAIN" in task.description.upper()
 
 
 def test_data_store_operations():
