@@ -166,6 +166,51 @@ def test_awaiting_route_does_not_escalate_when_missing_order_number(monkeypatch)
     assert flow.state.escalation_reason.startswith("Awaiting customer information")
 
 
+def test_support_endpoint_includes_status_for_awaiting_route(monkeypatch):
+    async def fake_kickoff(self, *args, **kwargs):
+        self.state.routing_action = "awaiting"
+        self.state.routing_missing_info = ["order_number"]
+        self.state.response = "Please provide your order number for further investigation."
+        self.state.response_confidence = 70
+        self.state.articles = []
+        self.state.category = "Order Issues"
+        self.state.category_confidence = 90
+        self.state.sentiment = "Concerned"
+        self.state.sentiment_confidence = 75
+        self.state.urgency = "High"
+        self.state.escalation_required = False
+        self.state.escalation_reason = "Awaiting order number"
+        self.state.triggered_keyword = None
+        self.state.steps = []
+        self.state.knowledge_source = "mock"
+        self.state.memory_saved = False
+        self.state.execution_mode = "mock"
+        self.state.prompt_template_used = None
+        self.state.skills_used = []
+        self.state.tools_used = []
+        self.state.cache_used = False
+        self.state.token_usage = {}
+        self.state.cost_usd = 0.0
+        self.state.api_tags = []
+        self.state.quality_evaluation = {}
+        self.state.pending_action = {}
+
+    monkeypatch.setattr("aamad.api.routes.SupportFlow.kickoff_async", fake_kickoff)
+    client = TestClient(app)
+    response = client.post(
+        "/api/support",
+        json={"inquiry": "My order is delayed and I don't have the order number."},
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "awaiting_customer_info"
+    assert payload["routing_action"] == "awaiting"
+    assert payload["escalation_required"] is False
+    assert payload["routing_missing_info"] == ["order_number"]
+
+
 def test_cors_preflight_returns_empty_204_without_content_length():
     client = TestClient(app)
 

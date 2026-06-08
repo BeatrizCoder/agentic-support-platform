@@ -67,6 +67,7 @@ class SupportResponse(BaseModel):
     escalation_required: bool
     escalation_reason: str
     reference_id: str
+    status: str | None = None
     triggered_keyword: str | None = None
     steps: list[dict[str, Any]]
     knowledge_source: str | None = None

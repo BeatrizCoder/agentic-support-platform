@@ -6082,7 +6082,7 @@
         routing_action: data.routing_action || null,
         routing_reason: data.routing_reason || null,
         routing_missing_info: Array.isArray(data.routing_missing_info) ? data.routing_missing_info : [],
-        status: data.status || (data.escalation_required ? 'pending_human_review' : 'completed'),
+        status: data.status || (data.routing_action === 'awaiting' ? 'awaiting_customer_info' : (data.escalation_required ? 'pending_human_review' : 'completed')),
         offline,
         timestamp: formatTimestamp(timestamp),
         timestampRaw: timestamp.toISOString(),
