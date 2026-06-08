@@ -665,6 +665,27 @@ class SupportFlowStepsMixin:
         if decision.triggered_keyword:
             self.state.triggered_keyword = decision.triggered_keyword
 
+        # CRITICAL FIX: Check if routing returned "awaiting" but customer actually provided
+        # the requested information (order number). This must happen BEFORE response generation
+        # to avoid asking for information the customer already provided.
+        self._order_provided_after_awaiting = False
+        if self.state.routing_action == "awaiting" and "order_number" in decision.missing_info:
+            order_num = extract_order_number(self.state.inquiry)
+            if order_num:
+                # Customer provided order number — promote to escalation immediately
+                self.state.routing_action = "escalate"
+                self.state.routing_reason = (
+                    f"Order number provided ({order_num}) — routing to specialist"
+                )
+                self._order_provided_after_awaiting = True
+                # Remove order_number from missing info
+                self.state.routing_missing_info = [
+                    m for m in self.state.routing_missing_info if m != "order_number"
+                ]
+                logger.info(
+                    "route_inquiry: promoted awaiting→escalate, order_num=%s", order_num
+                )
+
         # If refund intent + order number in the inquiry, always defer to the
         # refund lookup tool regardless of the routing engine's decision
         # (catches both "awaiting" and billing "escalate" cases).
@@ -677,12 +698,13 @@ class SupportFlowStepsMixin:
 
         self.log_step("Routing Engine", {
             "action": self.state.routing_action,
-            "reason": decision.reason,
-            "missing_info": decision.missing_info,
+            "reason": self.state.routing_reason,
+            "missing_info": self.state.routing_missing_info,
             "has_order_number": decision.has_order_number,
             "has_email": decision.has_email,
             "explicit_escalation": decision.explicit_escalation,
             "confidence": decision.confidence,
+            "order_provided_after_awaiting": self._order_provided_after_awaiting,
             "execution_mode": "deterministic",
         })
         return f"Routed as: {self.state.routing_action}"
@@ -806,44 +828,16 @@ class SupportFlowStepsMixin:
         self.state.escalation_reason = result["reason"]
         self.state.reference_id = result["reference_id"]
 
-        # If the routing action is currently 'awaiting' but the customer
-        # actually provided an order number in the inquiry (e.g. on
-        # re-submission), treat this as enough information to escalate.
-        self._order_provided_after_awaiting = False
+        # Note: Order number detection and promotion from awaiting→escalate now happens
+        # in route_inquiry() BEFORE response generation, so _order_provided_after_awaiting
+        # flag is already set if applicable. We just need to handle the awaiting state here.
         if self.state.routing_action == "awaiting":
-            order_num = extract_order_number(self.state.inquiry)
-            if order_num:
-                # Promote to escalation — do not ask for order number again
-                self.state.routing_action = "escalate"
-                self.state.escalation_required = True
+            # Awaiting missing customer information should stay awaiting
+            self.state.escalation_required = False
+            if not self.state.escalation_reason.startswith("Awaiting customer information"):
                 self.state.escalation_reason = (
-                    f"Order number provided ({order_num}) — routing to specialist"
+                    f"Awaiting customer information: {', '.join(self.state.routing_missing_info)}"
                 )
-                self._order_provided_after_awaiting = True
-                # Remove order_number from missing info if present
-                try:
-                    self.state.routing_missing_info = [m for m in self.state.routing_missing_info if m != "order_number"]
-                except Exception:
-                    pass
-                # Remove explicit missing-order prompts from external_context to avoid double-asking
-                try:
-                    import re as _re
-                    self.state.external_context = _re.sub(
-                        r"MISSING INFORMATION NEEDED: .*?order_number.*?\n",
-                        "",
-                        self.state.external_context or "",
-                        flags=_re.IGNORECASE | _re.DOTALL,
-                    )
-                except Exception:
-                    pass
-            else:
-                # Awaiting missing customer information should stay awaiting,
-                # not be converted into escalated.
-                self.state.escalation_required = False
-                if not self.state.escalation_reason.startswith("Awaiting customer information"):
-                    self.state.escalation_reason = (
-                        f"Awaiting customer information: {', '.join(self.state.routing_missing_info)}"
-                    )
         if result.get("triggered_keyword") and not self.state.triggered_keyword:
             self.state.triggered_keyword = result.get("triggered_keyword")
         self.state.tools_used.append("Escalation Evaluation Tool")
