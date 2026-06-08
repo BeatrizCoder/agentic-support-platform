@@ -12,6 +12,7 @@ requires-python = ">=3.9"
 authors = [{ name = "Synaptic AI Consulting" }]
 dependencies = [
   "pyyaml>=6.0",
+  "litellm>=0.5.0",
 ]
 keywords = ["multi-agent", "crew", "automation", "prompt-engineering"]
 classifiers = [
