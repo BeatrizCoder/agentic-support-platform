@@ -913,9 +913,77 @@ class SupportFlowStepsMixin:
             # PRIORITY 2: severe weather → auto-resolve; moderate → awaiting order number
             _weather_sev = self.state.weather_result.get("severity", "severe")
             if _weather_sev == "severe":
+                # Severe weather — generate explicit response with weather details
                 self.state.escalation_required = False
                 self.state.routing_action = "resolve"
                 self.state.auto_resolve_reason = "weather_delay_severe"
+                _is_pt_severe = self._is_portuguese(self.state.inquiry)
+                _city_severe = self.state.detected_city or ("sua região" if _is_pt_severe else "your area")
+                _temp_severe = self.state.weather_result.get("temperature_c", "")
+                _cond_severe = self.state.weather_result.get("conditions", "")
+                _wind_severe = self.state.weather_result.get("wind_speed_kmh", 0)
+                _visibility_severe = self.state.weather_result.get("visibility_m", 10000)
+                
+                # Build weather alert details
+                weather_details = []
+                if _wind_severe > 50:
+                    weather_details.append(
+                        f"ventos fortes ({_wind_severe} km/h)" if _is_pt_severe
+                        else f"strong winds ({_wind_severe} km/h)"
+                    )
+                if _visibility_severe < 1000:
+                    weather_details.append(
+                        f"baixa visibilidade ({_visibility_severe}m)" if _is_pt_severe
+                        else f"low visibility ({_visibility_severe}m)"
+                    )
+                if "thunderstorm" in _cond_severe.lower() or "tempestade" in _cond_severe.lower():
+                    weather_details.append(
+                        "tempestades severas" if _is_pt_severe else "severe thunderstorms"
+                    )
+                elif "rain" in _cond_severe.lower() or "chuva" in _cond_severe.lower():
+                    weather_details.append(
+                        "chuvas intensas" if _is_pt_severe else "heavy rainfall"
+                    )
+                
+                alert_text = ", ".join(weather_details) if weather_details else _cond_severe
+                
+                if _is_pt_severe:
+                    self.state.response = (
+                        f"⚠️ **Alerta Meteorológico Severo Detectado**\n\n"
+                        f"Identificamos condições climáticas severas em {_city_severe}:\n"
+                        f"• Condições: {_cond_severe}\n"
+                        f"• Temperatura: {_temp_severe}°C\n"
+                        f"• Alertas ativos: {alert_text}\n\n"
+                        f"**Impacto nas Entregas:**\n"
+                        f"Nestas situações, as transportadoras podem suspender temporariamente "
+                        f"as entregas para garantir a segurança das equipes e da sua encomenda. "
+                        f"Esta é uma medida preventiva padrão durante eventos climáticos severos.\n\n"
+                        f"**Próximos Passos:**\n"
+                        f"Seu caso foi registrado e continuaremos monitorando a normalização "
+                        f"das operações. Você receberá atualizações automáticas assim que as "
+                        f"condições climáticas melhorarem e as entregas forem retomadas."
+                    )
+                else:
+                    self.state.response = (
+                        f"⚠️ **Severe Weather Alert Detected**\n\n"
+                        f"We identified severe weather conditions in {_city_severe}:\n"
+                        f"• Conditions: {_cond_severe}\n"
+                        f"• Temperature: {_temp_severe}°C\n"
+                        f"• Active alerts: {alert_text}\n\n"
+                        f"**Delivery Impact:**\n"
+                        f"In these situations, carriers may temporarily suspend deliveries "
+                        f"to ensure the safety of their teams and your package. "
+                        f"This is a standard preventive measure during severe weather events.\n\n"
+                        f"**Next Steps:**\n"
+                        f"Your case has been registered and we will continue monitoring "
+                        f"the normalization of operations. You will receive automatic updates "
+                        f"as soon as weather conditions improve and deliveries resume."
+                    )
+                self.state.escalation_reason = (
+                    f"Clima severo em {_city_severe} — auto-resolvido com alerta meteorológico"
+                    if _is_pt_severe else
+                    f"Severe weather in {_city_severe} — auto-resolved with weather alert"
+                )
             else:
                 order_number = extract_order_number(self.state.inquiry)
                 if order_number:
@@ -935,21 +1003,42 @@ class SupportFlowStepsMixin:
                     _city_w = self.state.detected_city or ("sua região" if _is_pt_w else "your area")
                     _temp_w = self.state.weather_result.get("temperature_c", "")
                     _cond_w = self.state.weather_result.get("conditions", "")
+                    _humidity_w = self.state.weather_result.get("humidity_pct", "")
+                    _wind_w = self.state.weather_result.get("wind_speed_kmh", 0)
+                    
                     if _is_pt_w:
                         self.state.response = (
-                            f"🌧️ Verificamos as condições em {_city_w} "
-                            f"({_cond_w}, {_temp_w}°C). As condições climáticas "
-                            f"podem estar contribuindo para atrasos na sua região.\n\n"
-                            f"Para investigarmos seu pedido específico, "
-                            f"por favor informe o número do pedido."
+                            f"🌧️ **Verificação Meteorológica Realizada**\n\n"
+                            f"Analisamos as condições climáticas atuais para {_city_w}:\n"
+                            f"• Condições: {_cond_w}\n"
+                            f"• Temperatura: {_temp_w}°C\n"
+                            f"• Umidade: {_humidity_w}%\n"
+                            f"• Vento: {_wind_w} km/h\n\n"
+                            f"**Análise:**\n"
+                            f"Identificamos condições climáticas moderadas que podem estar "
+                            f"impactando parcialmente as operações logísticas na sua região. "
+                            f"No entanto, não há alertas severos ativos neste momento.\n\n"
+                            f"**Próximo Passo:**\n"
+                            f"Para verificarmos o status específico da sua entrega e confirmar "
+                            f"se o atraso está relacionado às condições climáticas ou a outro "
+                            f"fator operacional, por favor informe o número do pedido."
                         )
                     else:
                         self.state.response = (
-                            f"🌧️ We checked conditions in {_city_w} "
-                            f"({_cond_w}, {_temp_w}°C). Weather may be contributing "
-                            f"to delays in your area.\n\n"
-                            f"To investigate your specific order, "
-                            f"please provide your order number."
+                            f"🌧️ **Weather Check Completed**\n\n"
+                            f"We analyzed current weather conditions for {_city_w}:\n"
+                            f"• Conditions: {_cond_w}\n"
+                            f"• Temperature: {_temp_w}°C\n"
+                            f"• Humidity: {_humidity_w}%\n"
+                            f"• Wind: {_wind_w} km/h\n\n"
+                            f"**Analysis:**\n"
+                            f"We identified moderate weather conditions that may be partially "
+                            f"impacting logistics operations in your area. However, there are "
+                            f"no severe alerts active at this time.\n\n"
+                            f"**Next Step:**\n"
+                            f"To check your specific delivery status and confirm whether the "
+                            f"delay is related to weather conditions or another operational "
+                            f"factor, please provide your order number."
                         )
                     self.state.escalation_reason = (
                         "Moderate weather — awaiting order number for investigation"
@@ -980,28 +1069,43 @@ class SupportFlowStepsMixin:
 
             if self.state.routing_action == "awaiting":
                 # CASE 2: Clear weather + no order number → awaiting form with ☀️ message
+                humidity = self.state.weather_result.get("humidity_pct", "")
+                wind = self.state.weather_result.get("wind_speed_kmh", 0)
+                
                 if is_pt:
                     self.state.response = (
-                        f"☀️ Verificamos o clima em {city} — "
-                        f"{conditions}, {temp}°C. "
-                        f"As condições climáticas estão normais "
-                        f"e não estão afetando as entregas "
+                        f"☀️ **Verificação Meteorológica Realizada**\n\n"
+                        f"Analisamos as condições climáticas atuais para {city}:\n"
+                        f"• Condições: {conditions}\n"
+                        f"• Temperatura: {temp}°C\n"
+                        f"• Umidade: {humidity}%\n"
+                        f"• Vento: {wind} km/h\n\n"
+                        f"**Análise:**\n"
+                        f"As condições climáticas estão normais e não há alertas "
+                        f"meteorológicos ativos. O clima não está afetando as entregas "
                         f"na sua região.\n\n"
-                        f"Para investigar o atraso do seu pedido, "
-                        f"preciso do número do pedido. "
-                        f"Você pode encontrá-lo no e-mail "
-                        f"de confirmação da compra."
+                        f"**Próximo Passo:**\n"
+                        f"Como não identificamos condições climáticas que justifiquem "
+                        f"atrasos operacionais, vamos investigar o status da entrega "
+                        f"junto à transportadora. Para isso, preciso do número do pedido. "
+                        f"Você pode encontrá-lo no e-mail de confirmação da compra."
                     )
                 else:
                     self.state.response = (
-                        f"☀️ We checked the weather in {city} — "
-                        f"{conditions}, {temp}°C. "
-                        f"Weather conditions are normal and "
-                        f"not affecting deliveries in your area.\n\n"
-                        f"To investigate your order delay, "
-                        f"I need your order number. "
-                        f"You can find it in your purchase "
-                        f"confirmation email."
+                        f"☀️ **Weather Check Completed**\n\n"
+                        f"We analyzed current weather conditions for {city}:\n"
+                        f"• Conditions: {conditions}\n"
+                        f"• Temperature: {temp}°C\n"
+                        f"• Humidity: {humidity}%\n"
+                        f"• Wind: {wind} km/h\n\n"
+                        f"**Analysis:**\n"
+                        f"Weather conditions are normal and there are no active weather "
+                        f"alerts. The weather is not affecting deliveries in your area.\n\n"
+                        f"**Next Step:**\n"
+                        f"Since we did not identify weather conditions that would justify "
+                        f"operational delays, we will investigate the delivery status with "
+                        f"the carrier. To do this, I need your order number. You can find "
+                        f"it in your purchase confirmation email."
                     )
                 self.state.escalation_required = False
                 self.state.escalation_reason = "Awaiting customer information: order_number"
