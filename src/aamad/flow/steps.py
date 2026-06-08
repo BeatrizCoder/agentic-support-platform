@@ -514,8 +514,10 @@ class SupportFlowStepsMixin:
         self.state.detected_city = detected_city or ""
         logger.debug("detected_city: %s", self.state.detected_city)
 
-        # STEP C: Weather check for Order Issues with a detected city
-        if (detected_city and is_order_issue and
+        # STEP C: Weather check whenever a city is detected (provides context for responses)
+        # For Order Issues: drives routing decisions (severe=resolve, normal=awaiting/escalate)
+        # For other categories: provides contextual information in response
+        if (detected_city and
                 not (self.state.logistics_alert and self.state.logistics_alert.get("alert_active"))):
 
             if weather_result is None:
