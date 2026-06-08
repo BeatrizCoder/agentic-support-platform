@@ -809,6 +809,7 @@ class SupportFlowStepsMixin:
         # If the routing action is currently 'awaiting' but the customer
         # actually provided an order number in the inquiry (e.g. on
         # re-submission), treat this as enough information to escalate.
+        self._order_provided_after_awaiting = False
         if self.state.routing_action == "awaiting":
             order_num = extract_order_number(self.state.inquiry)
             if order_num:
@@ -818,6 +819,7 @@ class SupportFlowStepsMixin:
                 self.state.escalation_reason = (
                     f"Order number provided ({order_num}) — routing to specialist"
                 )
+                self._order_provided_after_awaiting = True
                 # Remove order_number from missing info if present
                 try:
                     self.state.routing_missing_info = [m for m in self.state.routing_missing_info if m != "order_number"]
@@ -1013,11 +1015,37 @@ class SupportFlowStepsMixin:
 
             elif self.state.routing_action == "escalate":
                 # CASE 3: Clear weather + has order number → escalate with context
-                self.state.external_context += (
-                    f"\nCLEAR WEATHER ESCALATION: "
-                    f"Weather in {city} is normal. "
-                    f"Escalating for order investigation."
-                )
+                # Check if this was promoted from awaiting (order number just provided)
+                if self._order_provided_after_awaiting:
+                    # Generate confirmation response instead of asking for order number
+                    order_num = extract_order_number(self.state.inquiry)
+                    if is_pt:
+                        self.state.response = (
+                            f"Obrigado por fornecer o número do pedido {order_num}. "
+                            f"☀️ Verificamos o clima em {city} — {conditions}, {temp}°C. "
+                            f"As condições climáticas estão normais.\n\n"
+                            f"Seu caso foi encaminhado para nossa equipe especializada "
+                            f"que irá investigar o atraso do seu pedido. "
+                            f"Um agente entrará em contato em até 24 horas. "
+                            f"Você receberá atualizações por email."
+                        )
+                    else:
+                        self.state.response = (
+                            f"Thank you for providing order number {order_num}. "
+                            f"☀️ We checked the weather in {city} — {conditions}, {temp}°C. "
+                            f"Weather conditions are normal.\n\n"
+                            f"Your case has been escalated to our specialized team "
+                            f"who will investigate your order delay. "
+                            f"An agent will contact you within 24 hours. "
+                            f"You'll receive updates via email."
+                        )
+                else:
+                    # Original escalation path (order number provided in first message)
+                    self.state.external_context += (
+                        f"\nCLEAR WEATHER ESCALATION: "
+                        f"Weather in {city} is normal. "
+                        f"Escalating for order investigation."
+                    )
                 self.state.escalation_required = True
                 self.state.escalation_reason = (
                     "Clima normal — escalando para investigação do pedido"
@@ -1030,6 +1058,7 @@ class SupportFlowStepsMixin:
                     "city": city,
                     "auto_resolved": False,
                     "hitl": True,
+                    "order_provided_after_awaiting": self._order_provided_after_awaiting,
                     "execution_mode": "deterministic",
                 })
 
@@ -1099,6 +1128,34 @@ class SupportFlowStepsMixin:
         else:
             # PRIORITY 5: routing engine decision (no external alert / refund match)
             if self.state.routing_action == "escalate":
+                # Check if order was provided after awaiting (general case without weather context)
+                if self._order_provided_after_awaiting:
+                    order_num = extract_order_number(self.state.inquiry)
+                    is_pt = self._is_portuguese(self.state.inquiry)
+                    if is_pt:
+                        self.state.response = (
+                            f"Obrigado por fornecer o número do pedido {order_num}. "
+                            f"Seu caso foi encaminhado para nossa equipe especializada "
+                            f"que irá investigar o problema. "
+                            f"Um agente entrará em contato em até 24 horas. "
+                            f"Você receberá atualizações por email."
+                        )
+                    else:
+                        self.state.response = (
+                            f"Thank you for providing order number {order_num}. "
+                            f"Your case has been escalated to our specialized team "
+                            f"who will investigate the issue. "
+                            f"An agent will contact you within 24 hours. "
+                            f"You'll receive updates via email."
+                        )
+                    self.log_step("Routing Engine", {
+                        "override": "order_provided_after_awaiting",
+                        "reason": "Order number provided after awaiting — escalating",
+                        "order_number": order_num,
+                        "auto_resolved": False,
+                        "hitl": True,
+                        "execution_mode": "deterministic",
+                    })
                 self.state.escalation_required = True
                 self.state.escalation_reason = self.state.routing_reason
 
