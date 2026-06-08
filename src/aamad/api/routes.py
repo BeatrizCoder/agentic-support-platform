@@ -414,7 +414,11 @@ async def create_support_ticket(
     try:
         # Process the support request through the CrewAI flow
         support_flow = SupportFlow()
-        await support_flow.kickoff_async({"inquiry": inquiry, "run_id": run_id})
+        await support_flow.kickoff_async({
+            "inquiry": inquiry,
+            "run_id": run_id,
+            "user_id": user_id
+        })
         # Unwrap the StateProxy so Pydantic/pydantic-core sees real Python lists,
         # not LockedListProxy (whose C-level list buffer is always empty).
         final_state = support_flow.state._unwrap()

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class SupportState(BaseModel):
     inquiry: str = ""
+    user_id: str = ""  # User/session ID for tracking conversation history
     category: str = "General Support"
     category_confidence: int = 0
     sentiment: str = "Neutral"

@@ -315,6 +315,43 @@ class SupportFlowStepsMixin:
         logger.debug("external_context before: %r", self.state.external_context)
 
         context_parts = []
+        
+        # CRITICAL: Check if user has a recent awaiting ticket and provided the requested info
+        # This handles the case where customer sends order number in a follow-up message
+        self._order_provided_after_awaiting = False
+        try:
+            from ..data_store import data_store
+            if hasattr(self.state, 'user_id') and self.state.user_id:
+                recent_tickets = data_store.get_user_tickets(self.state.user_id)
+                if recent_tickets:
+                    # Check most recent ticket (within last 10 minutes)
+                    latest = recent_tickets[0]
+                    import datetime
+                    if latest.created_at:
+                        time_diff = datetime.datetime.utcnow() - latest.created_at
+                        if time_diff.total_seconds() < 600:  # 10 minutes
+                            # Check if previous ticket was awaiting order_number
+                            if (latest.routing_action == "awaiting" and
+                                "order_number" in (latest.routing_missing_info or [])):
+                                # Check if current inquiry has order number
+                                order_num = extract_order_number(self.state.inquiry)
+                                if order_num:
+                                    logger.info(
+                                        "enrich: detected order %s after awaiting ticket %s",
+                                        order_num, latest.reference_id
+                                    )
+                                    self._order_provided_after_awaiting = True
+                                    # Force routing to escalate
+                                    self.state.routing_action = "escalate"
+                                    self.state.routing_reason = (
+                                        f"Order number {order_num} provided after awaiting"
+                                    )
+                                    context_parts.append(
+                                        f"FOLLOW-UP: Customer provided order #{order_num} "
+                                        f"after previous awaiting request (ticket {latest.reference_id})"
+                                    )
+        except Exception as e:
+            logger.error("enrich: failed to check previous tickets: %s", e)
 
         # ── Pending-action lookup (local DB — always runs, tool owns pattern matching) ──
         try:
