@@ -806,14 +806,42 @@ class SupportFlowStepsMixin:
         self.state.escalation_reason = result["reason"]
         self.state.reference_id = result["reference_id"]
 
+        # If the routing action is currently 'awaiting' but the customer
+        # actually provided an order number in the inquiry (e.g. on
+        # re-submission), treat this as enough information to escalate.
         if self.state.routing_action == "awaiting":
-            # Awaiting missing customer information should stay awaiting,
-            # not be converted into escalated.
-            self.state.escalation_required = False
-            if not self.state.escalation_reason.startswith("Awaiting customer information"):
+            order_num = extract_order_number(self.state.inquiry)
+            if order_num:
+                # Promote to escalation — do not ask for order number again
+                self.state.routing_action = "escalate"
+                self.state.escalation_required = True
                 self.state.escalation_reason = (
-                    f"Awaiting customer information: {', '.join(self.state.routing_missing_info)}"
+                    f"Order number provided ({order_num}) — routing to specialist"
                 )
+                # Remove order_number from missing info if present
+                try:
+                    self.state.routing_missing_info = [m for m in self.state.routing_missing_info if m != "order_number"]
+                except Exception:
+                    pass
+                # Remove explicit missing-order prompts from external_context to avoid double-asking
+                try:
+                    import re as _re
+                    self.state.external_context = _re.sub(
+                        r"MISSING INFORMATION NEEDED: .*?order_number.*?\n",
+                        "",
+                        self.state.external_context or "",
+                        flags=_re.IGNORECASE | _re.DOTALL,
+                    )
+                except Exception:
+                    pass
+            else:
+                # Awaiting missing customer information should stay awaiting,
+                # not be converted into escalated.
+                self.state.escalation_required = False
+                if not self.state.escalation_reason.startswith("Awaiting customer information"):
+                    self.state.escalation_reason = (
+                        f"Awaiting customer information: {', '.join(self.state.routing_missing_info)}"
+                    )
         if result.get("triggered_keyword") and not self.state.triggered_keyword:
             self.state.triggered_keyword = result.get("triggered_keyword")
         self.state.tools_used.append("Escalation Evaluation Tool")
@@ -832,6 +860,26 @@ class SupportFlowStepsMixin:
 
         # ── Priority chain: external alerts first, routing decision last ──
         logger.debug("escalation: refund_data=%s routing_action=%s skip_routing=%s", self.state.refund_data, self.state.routing_action, self.state.skip_routing)
+        # Ensure we have weather context available here — if a city was detected
+        # earlier but the weather check wasn't run for some reason, run it now
+        # so the escalation messaging can mention local conditions.
+        try:
+            if (not getattr(self.state, "weather_result", None)) and getattr(self.state, "detected_city", None):
+                weather_result = await self._run_weather(self.state.detected_city)
+                self.state.tools_used.append("Weather Check Tool")
+                self.state.weather_result = weather_result
+                if weather_result and weather_result.get("available"):
+                    # Derive weather_delay if applicable (uses helper from routing_engine)
+                    try:
+                        from ..routing_engine import check_weather_delay
+                        wd = check_weather_delay(self.state.detected_city, weather_result)
+                        if wd:
+                            self.state.weather_delay = wd
+                            self.state.api_tags.append("weather_alert")
+                    except Exception:
+                        pass
+        except Exception:
+            logger.exception("Failed to run weather check during escalation evaluation")
 
         if self.state.skip_routing:
             # Logistics alert resolved this ticket in enrich_with_external_data — do not override
