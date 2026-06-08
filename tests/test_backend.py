@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 import pytest
@@ -137,6 +138,32 @@ def test_support_endpoint_falls_back_when_flow_raises(monkeypatch):
     assert payload["response_confidence"] == 50
     assert payload["reference_id"].startswith("REF-")
     assert payload["execution_mode"] == "fallback"
+
+
+def test_awaiting_route_does_not_escalate_when_missing_order_number(monkeypatch):
+    flow = SupportFlow()
+    flow.state.routing_action = "awaiting"
+    flow.state.routing_missing_info = ["order_number"]
+    flow.state.response_confidence = 35
+    flow.state.sentiment = "Concerned"
+    flow.state.urgency = "High"
+    flow.state.inquiry = "Minha entrega não chegou, preciso do número do pedido"
+    flow.state.articles = []
+    flow.state.escalation_required = True
+
+    async def fake_execute_tool(tool_name, *args, **kwargs):
+        return {
+            "escalation_required": True,
+            "reason": "Low confidence in automated response.",
+            "reference_id": "ESC-2026-9999",
+        }
+
+    monkeypatch.setattr(flow, "execute_tool", fake_execute_tool)
+    asyncio.run(flow.evaluate_escalation())
+
+    assert flow.state.routing_action == "awaiting"
+    assert flow.state.escalation_required is False
+    assert flow.state.escalation_reason.startswith("Awaiting customer information")
 
 
 def test_cors_preflight_returns_empty_204_without_content_length():

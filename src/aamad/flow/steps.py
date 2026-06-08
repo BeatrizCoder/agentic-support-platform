@@ -805,6 +805,15 @@ class SupportFlowStepsMixin:
         self.state.escalation_required = result["escalation_required"]
         self.state.escalation_reason = result["reason"]
         self.state.reference_id = result["reference_id"]
+
+        if self.state.routing_action == "awaiting":
+            # Awaiting missing customer information should stay awaiting,
+            # not be converted into escalated.
+            self.state.escalation_required = False
+            if not self.state.escalation_reason.startswith("Awaiting customer information"):
+                self.state.escalation_reason = (
+                    f"Awaiting customer information: {', '.join(self.state.routing_missing_info)}"
+                )
         if result.get("triggered_keyword") and not self.state.triggered_keyword:
             self.state.triggered_keyword = result.get("triggered_keyword")
         self.state.tools_used.append("Escalation Evaluation Tool")
@@ -858,9 +867,8 @@ class SupportFlowStepsMixin:
                 self.state.routing_action = "resolve"
                 self.state.auto_resolve_reason = "weather_delay_severe"
             else:
-                import re as _re_w
-                _inquiry_has_order = bool(_re_w.search(r'\b\d{4,12}\b', self.state.inquiry))
-                if _inquiry_has_order:
+                order_number = extract_order_number(self.state.inquiry)
+                if order_number:
                     # Customer already provided order number on re-submission — escalate
                     self.state.escalation_required = True
                     self.state.routing_action = "escalate"
@@ -870,7 +878,7 @@ class SupportFlowStepsMixin:
                     )
                 else:
                     # Moderate weather, no order number yet — ask for it
-                    self.state.escalation_required = True
+                    self.state.escalation_required = False
                     self.state.routing_action = "awaiting"
                     self.state.auto_resolve_reason = "weather_delay_moderate"
                     _is_pt_w = self._is_portuguese(self.state.inquiry)
@@ -945,7 +953,7 @@ class SupportFlowStepsMixin:
                         f"You can find it in your purchase "
                         f"confirmation email."
                     )
-                self.state.escalation_required = True
+                self.state.escalation_required = False
                 self.state.escalation_reason = "Awaiting customer information: order_number"
                 self.log_step("Routing Engine", {
                     "override": "clear_weather_awaiting",
