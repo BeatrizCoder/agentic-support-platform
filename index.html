@@ -3265,7 +3265,12 @@
             </div>
 
             <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-left:3px solid #38BDF8;border-radius:12px;padding:20px 22px;margin-bottom:16px;">
-              ${fields || '<p style="color:#6B7280;font-size:0.88rem;">Please provide any additional details that may help us assist you.</p>'}
+              ${fields || `
+                <div style="font-size:0.88rem;color:#6B7280;line-height:1.45;">
+                  <p style="margin:0 0 8px;">PT: Para investigarmos seu pedido, por favor informe o número do pedido, a data do pedido e, se disponível, o código de rastreamento. Se você já forneceu o número do pedido, seu chamado será revisado e encaminhado para análise humana; um agente de suporte entrará em contato em até 24 horas.</p>
+                  <p style="margin:0;">EN: To investigate your order, please provide the order number, order date and, if available, the tracking code. If you have already provided the order number, your ticket will be reviewed and escalated to a specialist; a support agent will contact you within 24 hours.</p>
+                </div>
+              `}
             </div>
 
             <div class="button-row">
