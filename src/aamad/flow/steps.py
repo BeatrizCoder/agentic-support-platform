@@ -422,6 +422,7 @@ class SupportFlowStepsMixin:
 
         if cep and is_order_issue:
             # Pre-extract city via LLM so we can run ViaCEP + Weather simultaneously
+            # ALWAYS run weather check for Order Issues with location
             pre_weather_city = await extract_location_with_llm(self.state.inquiry)
             if pre_weather_city:
                 logger.info(
@@ -444,8 +445,11 @@ class SupportFlowStepsMixin:
                 else:
                     weather_result = gathered[1]
             else:
+                # No LLM city extraction, but still run ViaCEP
+                # Weather will be checked later if city is found from CEP
                 addr_result = await self._run_viacep(cep)
         elif cep:
+            # Non-Order Issues with CEP: still validate address
             addr_result = await self._run_viacep(cep)
 
         # ── Process CEP result → logistics alert ──
@@ -554,10 +558,12 @@ class SupportFlowStepsMixin:
         # STEP C: Weather check whenever a city is detected (provides context for responses)
         # For Order Issues: drives routing decisions (severe=resolve, normal=awaiting/escalate)
         # For other categories: provides contextual information in response
+        # CRITICAL: Always check weather for Order Issues with location, even if not in logistics alerts
         if (detected_city and
                 not (self.state.logistics_alert and self.state.logistics_alert.get("alert_active"))):
 
             if weather_result is None:
+                # Weather wasn't pre-fetched in parallel — run it now
                 # Not pre-fetched (no parallel path) — run now
                 logger.debug("weather: checking %s", detected_city)
                 weather_result = await self._run_weather(detected_city)
