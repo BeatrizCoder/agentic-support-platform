@@ -4110,8 +4110,16 @@
           </div>
         `;
       }
-      const statusText = ticket.escalation_required ? 'Escalated' : 'Resolved';
-      const statusClass = ticket.escalation_required ? 'red' : 'green';
+      const statusText = ticket.status === 'awaiting_customer_info'
+        ? 'Awaiting Info'
+        : ticket.status === 'pending_human_review' || ticket.routing_action === 'escalate' || ticket.escalation_required
+          ? 'Escalated'
+          : 'Resolved';
+      const statusClass = ticket.status === 'awaiting_customer_info'
+        ? 'yellow'
+        : ticket.status === 'pending_human_review' || ticket.routing_action === 'escalate' || ticket.escalation_required
+          ? 'red'
+          : 'green';
       const isHumanRequested = (ticket.inquiry || '').includes('[CUSTOMER REQUESTED HUMAN SUPPORT]') || ticket.tags?.includes('requested_human_support');
       const cleanInquiry = cleanInquiryDisplay(ticket.inquiry);
       const humanPill = isHumanRequested
@@ -5933,7 +5941,7 @@
         return;
       }
 
-      const enrichedInquiry = state.originalInquiry + '\n\n--- Additional Information ---\n' +
+      const enrichedInquiry = state.originalInquiry + '\n\n' +
         (orderNumber ? `Order Number: ${orderNumber.trim()}\n` : '') +
         (email       ? `Email: ${email.trim()}\n`              : '') +
         (invoice     ? `Invoice: ${invoice.trim()}\n`          : '') +
